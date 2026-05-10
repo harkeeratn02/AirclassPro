@@ -9,17 +9,32 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Initialize Gemini
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+let genAI: GoogleGenAI | null = null;
 
 async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
 
-  // CORS - Allow all origins in dev, or specific origin in production
+  // Lazy init Gemini to avoid crashing if key is missing at startup
+  if (process.env.GEMINI_API_KEY) {
+    genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  }
+
+  // CORS
   app.use(cors());
 
   // JSON parsing
   app.use(express.json());
+
+  // Health Check
+  app.get("/api/health", (req, res) => {
+    res.json({
+      status: "ok",
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || "development",
+      geminiConfigured: !!process.env.GEMINI_API_KEY
+    });
+  });
 
   const AIRPORT_COORDS: Record<string, { lat: number; lon: number }> = {
   "VABB": { lat: 19.0887, lon: 72.8679 },
@@ -97,14 +112,15 @@ app.get("/api/metar", async (req, res) => {
   // AI Endpoint
   app.post("/api/ai", async (req, res) => {
     try {
-      const { model, contents, config } = req.body;
+      const { model: modelId, contents, config } = req.body;
       
-      if (!process.env.GEMINI_API_KEY) {
+      if (!process.env.GEMINI_API_KEY || !genAI) {
+        console.error("[CRITICAL] GEMINI_API_KEY is not set in environment variables");
         return res.status(500).json({ error: "GEMINI_API_KEY not configured on server" });
       }
 
       const result = await genAI.models.generateContent({
-        model: model || "gemini-3-flash-preview",
+        model: modelId || "gemini-3-flash-preview",
         contents,
         config
       });
