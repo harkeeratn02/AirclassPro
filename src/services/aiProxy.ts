@@ -1,7 +1,5 @@
 async function callAiProxy(contents: any, config?: any, model: string = "gemini-3-flash-preview") {
-  const baseUrl = import.meta.env.VITE_API_URL || "";
-  const apiUrl = `${baseUrl}/api/ai`;
-  console.log(`[AI Proxy] Calling: ${apiUrl}`);
+  const apiUrl = `/api/ai`;
   
   const response = await fetch(apiUrl, {
     method: "POST",

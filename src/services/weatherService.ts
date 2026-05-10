@@ -17,8 +17,7 @@ export interface WeatherData {
 }
 
 async function fetchMETAR(icao: string): Promise<any> {
-  const baseUrl = import.meta.env.VITE_API_URL || "";
-  const response = await fetch(`${baseUrl}/api/metar?icao=${icao}`);
+  const response = await fetch(`/api/metar?icao=${icao}`);
   if (!response.ok) {
     throw new Error("Please check your internet connection and try again.");
   }
@@ -27,8 +26,7 @@ async function fetchMETAR(icao: string): Promise<any> {
 
 async function fetchTAF(icao: string): Promise<any | null> {
   try {
-    const baseUrl = import.meta.env.VITE_API_URL || "";
-    const response = await fetch(`${baseUrl}/api/taf?icao=${icao}`);
+    const response = await fetch(`/api/taf?icao=${icao}`);
     if (response.ok) {
       return await response.json();
     }
