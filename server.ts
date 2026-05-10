@@ -2,9 +2,13 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
+import { GoogleGenAI } from "@google/genai";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Initialize Gemini
+const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
 async function startServer() {
   const app = express();
@@ -83,6 +87,27 @@ app.get("/api/metar", async (req, res) => {
       res.status(response.status).json({ error: "Failed to fetch TAF" });
     } catch (error) {
       res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // AI Endpoint
+  app.post("/api/ai", async (req, res) => {
+    try {
+      const { model, contents, config } = req.body;
+      
+      if (!process.env.GEMINI_API_KEY) {
+        return res.status(500).json({ error: "GEMINI_API_KEY not configured on server" });
+      }
+
+      const result = await genAI.models.generateContent({
+        model: model || "gemini-3-flash-preview",
+        contents,
+        config
+      });
+      res.json({ text: result.text });
+    } catch (error: any) {
+      console.error("AI Error:", error);
+      res.status(500).json({ error: error.message || "AI generation failed" });
     }
   });
 

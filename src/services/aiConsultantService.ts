@@ -1,6 +1,5 @@
-import { GoogleGenAI } from "@google/genai";
+import callAiProxy from "./aiProxy";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const model = "gemini-3-flash-preview";
 
 export interface SubjectChapter {
@@ -30,10 +29,7 @@ export async function getChapterBrief(chapter: SubjectChapter): Promise<string> 
   `.trim();
 
   try {
-    const result = await ai.models.generateContent({
-      model,
-      contents: prompt
-    });
+    const result = await callAiProxy(prompt, undefined, model);
     return result.text || "I'm sorry, I couldn't generate a brief for this chapter.";
   } catch (error) {
     console.error("Gemini Error:", error);
@@ -66,13 +62,7 @@ export async function generateAIFlashcards(subject: string, topic: string): Prom
     `.trim();
   
     try {
-      const result = await ai.models.generateContent({
-        model,
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json"
-        }
-      });
+      const result = await callAiProxy(prompt, { responseMimeType: "application/json" }, model);
       const text = result.text || '{"flashcards": []}';
       return JSON.parse(text.replace(/```json|```/g, ""));
     } catch (error) {
@@ -108,13 +98,7 @@ export async function generateAIQuestions(subject: string, topic: string): Promi
     `.trim();
   
     try {
-      const result = await ai.models.generateContent({
-        model,
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json"
-        }
-      });
+      const result = await callAiProxy(prompt, { responseMimeType: "application/json" }, model);
       const text = result.text || '{"questions": []}';
       return JSON.parse(text.replace(/```json|```/g, ""));
     } catch (error) {
@@ -149,10 +133,7 @@ export async function getWeatherBrief(icao: string, metar: string, taf: string |
   `.trim();
 
   try {
-    const result = await ai.models.generateContent({
-      model,
-      contents: prompt
-    });
+    const result = await callAiProxy(prompt, undefined, model);
     return result.text || "I'm sorry, I couldn't generate a weather brief at this moment.";
   } catch (error) {
     console.error("Gemini Weather Error:", error);
@@ -181,10 +162,7 @@ export async function getWeatherResponse(question: string, context: { icao: stri
   `.trim();
 
   try {
-    const result = await ai.models.generateContent({
-      model,
-      contents: prompt
-    });
+    const result = await callAiProxy(prompt, undefined, model);
     return result.text || "I was unable to analyze your request. Please try rephrasing.";
   } catch (error) {
     console.error("Gemini Q&A Error:", error);
@@ -211,10 +189,7 @@ export async function decodeWeather(icao: string, metar: string, taf: string | n
   `.trim();
 
   try {
-    const result = await ai.models.generateContent({
-      model,
-      contents: prompt
-    });
+    const result = await callAiProxy(prompt, undefined, model);
     return result.text || "Unable to decode weather strings.";
   } catch (error) {
     console.error("Gemini Decode Error:", error);
@@ -238,10 +213,7 @@ export async function getAIInstructorBriefing(icao: string, metar: string, taf: 
   `.trim();
 
   try {
-    const result = await ai.models.generateContent({
-      model,
-      contents: prompt
-    });
+    const result = await callAiProxy(prompt, undefined, model);
     return result.text || "I'm sorry, I couldn't generate a briefing right now.";
   } catch (error) {
     console.error("Instructor Briefing Error:", error);
