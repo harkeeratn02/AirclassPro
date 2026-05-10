@@ -23,18 +23,14 @@ export default async function handler(req: Request) {
       });
     }
 
-    const genAI = new GoogleGenAI(apiKey);
-    const aiModel = genAI.getGenerativeModel({ 
+    const genAI = new GoogleGenAI({ apiKey });
+    const response = await genAI.models.generateContent({
       model: model || "gemini-3-flash-preview",
-      generationConfig: aiConfig
+      contents,
+      config: aiConfig
     });
 
-    // Handle string contents or object contents
-    const result = await aiModel.generateContent(contents);
-    const response = await result.response;
-    const text = response.text();
-
-    return new Response(JSON.stringify({ text }), {
+    return new Response(JSON.stringify({ text: response.text }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });

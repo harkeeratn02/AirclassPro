@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { WeatherData, weatherService } from '../../services/weatherService';
-import { getWeatherBrief, decodeWeather, getWeatherResponse } from '../../services/aiConsultantService';
+import { getWeatherBrief, decodeWeather, getWeatherResponse, getAIInstructorBriefing } from '../../services/aiConsultantService';
 import { PRIORITY_AIRPORTS, Airport } from '../../constants/airports';
 
 export default function MeteorologyView() {
@@ -41,6 +41,7 @@ export default function MeteorologyView() {
   
   // AI State
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  const [instructorBriefing, setInstructorBriefing] = useState<string | null>(null);
   const [aiQuestion, setAiQuestion] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [dgcaMode, setDgcaMode] = useState(false);
@@ -93,13 +94,20 @@ export default function MeteorologyView() {
     if (!icao || icao.length < 3) return;
     setIsFetching(true);
     setAiAnalysis(null);
+    setInstructorBriefing(null);
     setError(null);
     try {
       const data = await weatherService.fetchWeather(icao.toUpperCase());
       setCurrentWeather(data);
       if (activeTab === 'ai') {
-        const decoded = await decodeWeather(data.icao, data.metar, data.taf);
+        setIsAiLoading(true);
+        const [decoded, briefing] = await Promise.all([
+          decodeWeather(data.icao, data.metar, data.taf),
+          getAIInstructorBriefing(data.icao, data.metar, data.taf)
+        ]);
         setAiAnalysis(decoded);
+        setInstructorBriefing(briefing);
+        setIsAiLoading(false);
       }
     } catch (err: any) {
       console.error(err);
@@ -449,188 +457,136 @@ export default function MeteorologyView() {
       <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
          {currentWeather ? (
            <>
-            <div className="grid md:grid-cols-2 gap-6">
-                <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden">
+            <div className="grid md:grid-cols-2 gap-8">
+                {/* Raw METAR Card */}
+                <motion.div 
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden flex flex-col h-full border border-slate-800"
+                >
                    <div className="absolute top-0 right-0 p-8 opacity-5">
-                      <CloudSun size={120} />
+                      <Wind size={120} />
                    </div>
-                   <div className="relative z-10">
+                   <div className="relative z-10 flex flex-col h-full">
                       <div className="flex items-center justify-between mb-8">
                         <div className="flex items-center gap-3">
-                           <div className="p-2 bg-blue-500 text-white rounded-xl">
-                              <MapPin size={20} />
+                           <div className="p-2 bg-slate-800 text-blue-400 rounded-xl border border-slate-700">
+                              <Gauge size={20} />
                            </div>
                            <div>
-                              <h4 className="font-black text-lg leading-tight uppercase">{currentWeather.icao}</h4>
-                              <p className="text-[10px] font-black uppercase text-blue-400 tracking-widest">{currentWeather.parsed?.name || 'Live Broadcast'}</p>
+                              <h4 className="font-black text-lg leading-tight uppercase tracking-tight">Raw METAR Stream</h4>
+                              <p className="text-[10px] font-black uppercase text-blue-400 tracking-widest">{currentWeather.icao} Broadcast</p>
                            </div>
                         </div>
-                        <button className="text-white/40 hover:text-white transition-colors">
-                           <Share2 size={18} />
-                        </button>
+                        <div className="bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20">
+                          <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Live</p>
+                        </div>
                       </div>
 
-                      <div className="space-y-6">
-                         {/* Structured Data Grid */}
-                         <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
-                               <p className="text-[8px] font-black uppercase text-gray-500 mb-1">Wind</p>
-                               <div className="flex items-center gap-2">
-                                  <Wind size={14} className="text-blue-400" />
-                                  <p className="font-black text-sm">
-                                    {currentWeather.parsed?.windDir === 0 ? 'Vrb' : `${currentWeather.parsed?.windDir}°`} @ {currentWeather.parsed?.windSpeed} KT
-                                    {currentWeather.parsed?.windGust ? ` G ${currentWeather.parsed?.windGust}` : ''}
-                                  </p>
-                               </div>
+                      <div className="flex-1 space-y-6">
+                        <div className="bg-black/40 p-6 rounded-3xl border border-white/5 font-mono text-sm leading-relaxed text-blue-100 shadow-inner">
+                           {currentWeather.metar}
+                        </div>
+
+                        {currentWeather.taf && (
+                           <div className="space-y-3">
+                              <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-2">Terminal Aerodrome Forecast (TAF)</p>
+                              <div className="bg-black/20 p-6 rounded-3xl border border-white/5 font-mono text-[11px] leading-relaxed text-slate-400 whitespace-pre-wrap">
+                                 {currentWeather.taf}
+                              </div>
+                           </div>
+                        )}
+
+                        <div className="grid grid-cols-2 gap-4">
+                           <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                              <p className="text-[8px] font-black uppercase text-slate-500 mb-1">Observation</p>
+                              <p className="font-bold text-xs text-slate-300">{formatObsTime(currentWeather.parsed?.obsTime).utc}</p>
+                           </div>
+                           <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                              <p className="text-[8px] font-black uppercase text-slate-500 mb-1">Local Time</p>
+                              <p className="font-bold text-xs text-slate-300">{formatObsTime(currentWeather.parsed?.obsTime).ist}</p>
+                           </div>
+                        </div>
+                      </div>
+                   </div>
+                </motion.div>
+
+                {/* AI Instructor Briefing Card */}
+                <motion.div 
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="bg-slate-800 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden flex flex-col h-full border border-slate-700"
+                >
+                   <div className="absolute top-0 right-0 p-8 opacity-5">
+                      <Sparkles size={120} className="text-blue-500" />
+                   </div>
+                   <div className="relative z-10 flex flex-col h-full">
+                      <div className="flex items-center justify-between mb-8">
+                         <div className="flex items-center gap-3">
+                            <div className="p-2 bg-blue-600 text-white rounded-xl shadow-[0_0_15px_rgba(37,99,235,0.4)]">
+                               <Sparkles size={20} />
                             </div>
-                            <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
-                               <p className="text-[8px] font-black uppercase text-gray-500 mb-1">Visibility</p>
-                               <div className="flex items-center gap-2">
-                                  <Globe size={14} className="text-emerald-400" />
-                                  <p className="font-black text-sm">
-                                    {currentWeather.parsed?.visibility === '9999' || parseInt(currentWeather.parsed?.visibility || '0') >= 10 ? '10KM+' : `${currentWeather.parsed?.visibility}M`}
-                                  </p>
-                               </div>
-                            </div>
-                            <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
-                               <p className="text-[8px] font-black uppercase text-gray-500 mb-1">Temp / Dew</p>
-                               <div className="flex items-center gap-2">
-                                  <Thermometer size={14} className="text-orange-400" />
-                                  <p className="font-black text-sm">{currentWeather.parsed?.temp}°C / {currentWeather.parsed?.dewp}°C</p>
-                               </div>
-                            </div>
-                            <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
-                               <p className="text-[8px] font-black uppercase text-gray-500 mb-1">QNH (Pressure)</p>
-                               <div className="flex items-center gap-2">
-                                  <Gauge size={14} className="text-purple-400" />
-                                  <p className="font-black text-sm">{currentWeather.parsed?.altimeter} hPa</p>
-                               </div>
+                            <div>
+                               <h4 className="font-black text-lg leading-tight uppercase tracking-tight">AI Flight Consultant</h4>
+                               <p className="text-[10px] font-black uppercase text-blue-400 tracking-widest">Expert Systems Active</p>
                             </div>
                          </div>
-
-                         <div>
-                            <p className="text-[10px] font-black uppercase text-white/40 mb-3 ml-1">Observation Time</p>
-                            <div className="bg-white/5 p-4 rounded-2xl border border-white/10 flex justify-between">
+                         <div className="flex bg-slate-900/50 p-1 rounded-xl border border-slate-700">
+                            <button className="px-3 py-1 text-[8px] font-black uppercase bg-blue-600 text-white rounded-lg shadow-sm">Briefing</button>
+                            <button className="px-3 py-1 text-[8px] font-black uppercase text-slate-500">History</button>
+                         </div>
+                      </div>
+                      
+                      <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                         {isAiLoading ? (
+                            <div className="py-20 text-center space-y-6">
+                               <div className="relative inline-block">
+                                  <Loader2 size={48} className="text-blue-500 animate-spin" />
+                                  <div className="absolute inset-0 bg-blue-500/20 blur-xl animate-pulse"></div>
+                               </div>
                                <div>
-                                  <p className="text-[8px] font-black uppercase text-gray-500">UTC</p>
-                                  <p className="font-black text-xs text-blue-400">{formatObsTime(currentWeather.parsed?.obsTime).utc}</p>
-                                </div>
-                                <div className="text-right">
-                                   <p className="text-[8px] font-black uppercase text-gray-500">IST</p>
-                                   <p className="font-black text-xs text-orange-400">{formatObsTime(currentWeather.parsed?.obsTime).ist}</p>
-                                </div>
-                             </div>
-                          </div>
-
-                          <div>
-                             <p className="text-[10px] font-black uppercase text-white/40 mb-3 ml-1">Raw METAR Telegram</p>
-                             <div className="bg-black/30 p-5 rounded-2xl border border-white/5 font-mono text-xs leading-relaxed text-blue-300">
-                                {currentWeather.metar}
-                             </div>
-                          </div>
-                          {currentWeather.taf && (
-                             <div>
-                                <p className="text-[10px] font-black uppercase text-white/40 mb-3 ml-1">TAF Forecast Data</p>
-                                <div className="bg-black/30 p-5 rounded-2xl border border-white/5 font-mono text-[10px] leading-relaxed text-emerald-300 whitespace-pre-wrap">
-                                   {currentWeather.taf}
-                                </div>
-                             </div>
-                          )}
-                       </div>
-                    </div>
-                 </div>
-
-                 <div className="space-y-6">
-                    <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100 relative overflow-hidden h-full">
-                       <div className="absolute top-0 right-0 p-8 opacity-5">
-                          <Sparkles size={120} className="text-blue-600" />
-                       </div>
-                       <div className="relative z-10 flex flex-col h-full">
-                          <div className="flex items-center justify-between mb-8">
-                             <div className="flex items-center gap-3">
-                                <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
-                                   <Sparkles size={20} />
-                                </div>
-                                <h4 className="font-black text-xs uppercase tracking-widest text-slate-800">AI Pilot Briefing</h4>
-                             </div>
-                             <div className="flex bg-slate-100 p-1 rounded-lg">
-                                <button 
-                                  onClick={() => setDgcaMode(false)}
-                                  className={`px-3 py-1 text-[8px] font-black uppercase rounded ${!dgcaMode ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400'}`}
-                                >
-                                  Pilot
-                                </button>
-                                <button 
-                                  onClick={() => setDgcaMode(true)}
-                                  className={`px-3 py-1 text-[8px] font-black uppercase rounded ${dgcaMode ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400'}`}
-                                >
-                                  Student
-                                </button>
-                             </div>
-                          </div>
-                          
-                          <div className="flex-1 overflow-y-auto pr-2 scrollbar-hide">
-                             {isAiLoading ? (
-                                <div className="py-20 text-center space-y-4">
-                                   <Loader2 size={32} className="text-blue-600 animate-spin mx-auto" />
-                                   <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 animate-pulse">Consulting Met Databanks...</p>
-                                </div>
-                             ) : aiAnalysis ? (
-                                <div className="prose prose-slate prose-sm max-w-none">
-                                   <ReactMarkdown>{aiAnalysis}</ReactMarkdown>
-                                   <button 
-                                     onClick={() => setAiAnalysis(null)}
-                                     className="mt-6 text-[10px] font-black uppercase text-blue-600 hover:underline"
-                                   >
-                                     Back to Options
-                                   </button>
-                                </div>
-                             ) : (
-                                <div className="space-y-4">
-                                   <p className="text-slate-500 font-medium leading-relaxed italic text-sm">
-                                     {dgcaMode 
-                                       ? "I'll explain this weather as a DGCA Ground Instructor, highlighting exam-critical elements."
-                                       : "Professional operational brief focused on safety and flight planning."}
-                                   </p>
-                                   <div className="grid gap-3">
-                                      <button 
-                                        onClick={async () => {
-                                          setIsAiLoading(true);
-                                          const prompt = dgcaMode 
-                                            ? `Explain the METAR and TAF for ${currentWeather.icao} as a DGCA Meteorology instructor for a student pilot. Use simple language and highlight parts that commonly appear in exams.` 
-                                            : undefined;
-                                          const decoded = await decodeWeather(currentWeather.icao, currentWeather.metar, currentWeather.taf);
-                                          if (dgcaMode) {
-                                             const response = await getWeatherResponse(prompt!, { icao: currentWeather.icao, metar: currentWeather.metar, taf: currentWeather.taf });
-                                             setAiAnalysis(response);
-                                          } else {
-                                             setAiAnalysis(decoded);
-                                          }
-                                          setIsAiLoading(false);
-                                        }}
-                                        className="w-full py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-lg"
-                                      >
-                                        {dgcaMode ? 'Exam Decode' : 'Smart Decoder'}
-                                      </button>
-                                      <button 
-                                        onClick={async () => {
-                                          setIsAiLoading(true);
-                                          const brief = await getWeatherBrief(currentWeather.icao, currentWeather.metar, currentWeather.taf);
-                                          setAiAnalysis(brief);
-                                          setIsAiLoading(false);
-                                        }}
-                                        className="w-full py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-900 transition-all shadow-lg"
-                                      >
-                                        AirclassPRO Intelligence Briefing
-                                      </button>
-                                   </div>
-                                </div>
-                             )}
-                          </div>
-                       </div>
-                    </div>
-                 </div>
-             </div>
+                                  <p className="text-sm font-black uppercase tracking-[0.2em] text-blue-400 animate-pulse">Running Meteorological Analysis</p>
+                                  <p className="text-[10px] text-slate-500 mt-2 font-medium">Decoding complex weather patterns...</p>
+                               </div>
+                            </div>
+                         ) : instructorBriefing ? (
+                            <div className="prose prose-invert prose-blue max-w-none prose-sm">
+                               <div className="instructor-badge inline-flex items-center gap-2 bg-blue-500/10 text-blue-400 px-4 py-1.5 rounded-full border border-blue-500/20 mb-6 font-black text-[10px] uppercase tracking-widest">
+                                  <Mic size={12} />
+                                  Instructor Voice Active
+                               </div>
+                               <ReactMarkdown>{instructorBriefing}</ReactMarkdown>
+                               
+                               <div className="mt-8 pt-8 border-t border-slate-700 flex gap-4">
+                                  <button 
+                                    onClick={() => handleSearch(currentWeather.icao)}
+                                    className="flex-1 py-3 bg-slate-900 border border-slate-700 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:border-slate-500 transition-all"
+                                  >
+                                    Re-brief
+                                  </button>
+                                  <button 
+                                    className="flex-1 py-3 bg-blue-600 rounded-xl text-[10px] font-black uppercase tracking-widest text-white shadow-lg hover:bg-blue-500 transition-all"
+                                    onClick={() => setActiveTab('regional')}
+                                  >
+                                    Back to Map
+                                  </button>
+                               </div>
+                            </div>
+                         ) : (
+                            <div className="py-20 text-center">
+                               <button 
+                                 onClick={() => handleSearch(currentWeather.icao)}
+                                 className="px-10 py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-[2rem] font-black uppercase tracking-widest text-xs shadow-2xl transition-all scale-110 active:scale-95"
+                               >
+                                 Generate AI Briefing
+                               </button>
+                               <p className="text-slate-500 text-[10px] mt-6 font-medium uppercase tracking-widest">Click to start expert consulting</p>
+                            </div>
+                         )}
+                      </div>
+                   </div>
+                </motion.div>
+            </div>
 
              {/* Calculations & Q&A */}
              <div className="grid lg:grid-cols-[1fr,400px] gap-8">

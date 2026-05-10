@@ -177,3 +177,27 @@ export async function decodeWeather(icao: string, metar: string, taf: string | n
     return "Weather decoding system offline. Reference AirclassPRO materials for manual decoding.";
   }
 }
+
+export async function getAIInstructorBriefing(icao: string, metar: string, taf: string | null): Promise<string> {
+  const prompt = `
+    Analyze this raw METAR string for ${icao.toUpperCase()} and provide a exactly 3-sentence briefing for a pilot.
+    
+    METAR: ${metar}
+    TAF: ${taf || 'Not available'}
+
+    Task:
+    1. Sentence 1: Explain the wind and visibility in plain English.
+    2. Sentence 2: Call out any specific hazards (like TS, FG, or low ceilings).
+    3. Sentence 3: Give a final Go/No-Go recommendation based on the conditions.
+    
+    Format: Use clear Markdown. Focus on being extremely concise and professional.
+  `.trim();
+
+  try {
+    const response = await callAiProxy(prompt);
+    return response.text || "I'm sorry, I couldn't generate a briefing right now.";
+  } catch (error) {
+    console.error("Instructor Briefing Error:", error);
+    return "The instructor is currently checked out. Please try again in a moment.";
+  }
+}

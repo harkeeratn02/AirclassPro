@@ -46,65 +46,28 @@ async function fetchOpenMeteo(lat: number, lon: number) {
 
 // API Route for METAR (Server-side fetch to bypass CORS)
 app.get("/api/metar", async (req, res) => {
-  const icao = String(req.query.icao || "").toUpperCase();
+  const icao = String(req.query.icao || "").toUpperCase().trim();
   if (!icao) {
     return res.status(400).json({ error: "ICAO code is required" });
   }
 
-  const urls = [
-    `https://aviationweather.gov/api/data/metar?ids=${icao}&format=json&hours=2`,
-    `https://aviationweather.gov/api/data/metar?ids=${icao}&format=raw`
-  ];
+  const url = `https://aviationweather.gov/api/data/metar?ids=${icao}&format=json`;
 
-  let aviationData: any = null;
-  let isRaw = false;
-
-  for (const url of urls) {
-    try {
-      const response = await fetch(url);
-      if (response.ok) {
-        const contentType = response.headers.get("content-type");
-        if (contentType && contentType.includes("application/json")) {
-          const data = await response.json();
-          if (Array.isArray(data) && data.length > 0) {
-            aviationData = data;
-            break;
-          }
-        } else {
-          const text = await response.text();
-          if (text && text.length > 5) {
-            aviationData = [{ rawOb: text, icaoId: icao }];
-            isRaw = true;
-            break;
-          }
-        }
+  try {
+    const response = await fetch(url);
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data) && data.length > 0) {
+        return res.json(data);
+      } else {
+        return res.status(404).json({ error: "No METAR data found for this ICAO." });
       }
-    } catch (error) {
-      continue;
     }
+    res.status(response.status).json({ error: "Failed to fetch METAR from Aviation Weather Center" });
+  } catch (error: any) {
+    console.error("METAR Proxy Error:", error);
+    res.status(500).json({ error: "Internal server error during weather fetch" });
   }
-
-  // If we have some data, try to enrich it with Open-Meteo if it's raw or missing some fields
-  if (aviationData && AIRPORT_COORDS[icao]) {
-    const coords = AIRPORT_COORDS[icao];
-    const omData = await fetchOpenMeteo(coords.lat, coords.lon);
-    
-    if (omData && omData.current) {
-      const record = aviationData[0];
-      // Enrich with Open-Meteo if fields are null/missing
-      if (!record.temp) record.temp = omData.current.temperature_2m;
-      if (!record.wspd) record.wspd = Math.round(omData.current.wind_speed_10m * 0.539957); // kmh to kts
-      if (!record.wdir) record.wdir = omData.current.wind_direction_10m;
-      if (!record.altim) record.altim = omData.current.pressure_msl;
-      if (!record.wgst) record.wgst = Math.round(omData.current.wind_gusts_10m * 0.539957);
-    }
-  }
-
-  if (aviationData) {
-    return res.json(aviationData);
-  }
-
-  res.status(502).json({ error: "Failed to fetch METAR from all upstream sources" });
 });
 
   // API Route for TAF

@@ -56,8 +56,8 @@ export const weatherService = {
       const tafRecord = Array.isArray(tafData) ? tafData[0] : null;
 
       return {
-        metar: metarRecord.rawOb,
-        taf: tafRecord?.rawTAF || tafRecord?.rawTaf || null,
+        metar: metarRecord.raw_text || metarRecord.rawOb || "",
+        taf: tafRecord?.raw_text || tafRecord?.rawTAF || tafRecord?.rawTaf || null,
         icao: cleanIcao,
         timestamp: new Date().toISOString(),
         parsed: {
