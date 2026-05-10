@@ -1,4 +1,7 @@
-import callAiProxy from "./aiProxy";
+import { GoogleGenAI } from "@google/genai";
+
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const model = "gemini-3-flash-preview";
 
 export interface SubjectChapter {
   subject: string;
@@ -27,66 +30,98 @@ export async function getChapterBrief(chapter: SubjectChapter): Promise<string> 
   `.trim();
 
   try {
-    const response = await callAiProxy(prompt);
-    return response.text || "I'm sorry, I couldn't generate a brief for this chapter.";
+    const result = await ai.models.generateContent({
+      model,
+      contents: prompt
+    });
+    return result.text || "I'm sorry, I couldn't generate a brief for this chapter.";
   } catch (error) {
     console.error("Gemini Error:", error);
     return "The AI consultant is currently offline. Please try again later.";
   }
 }
 
-export async function generateAIFlashcards(subject: string, topic: string): Promise<{ front: string, back: string }[]> {
-  const prompt = `
-    Generate 5 high-quality flashcards for the following aviation topic.
-    Subject: ${subject}
-    Topic: ${topic}
-
-    Strictly use AirclassPRO DGCA Exam Preparation standards.
-    Format your response AS A VALID JSON ARRAY of objects. 
-    Each object must have "front" (question/term) and "back" (answer/definition) keys.
-    Do NOT include markdown formatting like \`\`\`json or \`\`\`. Just the raw JSON.
-  `.trim();
-
-  try {
-    const response = await callAiProxy(prompt);
-    const text = response.text || "[]";
-    return JSON.parse(text.replace(/```json|```/g, ""));
-  } catch (error) {
-    console.error("Flashcard Gen Error:", error);
-    return [];
+export async function generateAIFlashcards(subject: string, topic: string): Promise<any> {
+    const prompt = `
+      You are an expert DGCA aviation exam coach. Generate exactly 15 flashcards for the topic: "${topic}" within ${subject}.
+  
+      Return ONLY valid JSON in this exact format, no markdown, no preamble:
+      {
+        "topic": "${topic}",
+        "flashcards": [
+          {
+            "id": 1,
+            "front": "Short question or term",
+            "back": "Concise, memorable answer (2-3 sentences max)",
+            "category": "Formula/Definition/Rule/Concept"
+          }
+        ]
+      }
+  
+      Rules:
+      - All 15 flashcards relevant to ${topic}
+      - Mix formulas, definitions, rules, and key concepts
+      - Keep fronts punchy and backs concise but complete
+      - DGCA exam difficulty level
+    `.trim();
+  
+    try {
+      const result = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json"
+        }
+      });
+      const text = result.text || '{"flashcards": []}';
+      return JSON.parse(text.replace(/```json|```/g, ""));
+    } catch (error) {
+      console.error("Flashcard Gen Error:", error);
+      return { topic, flashcards: [] };
+    }
   }
-}
 
-export async function generateAIQuestions(subject: string, topic: string): Promise<any[]> {
-  const prompt = `
-    Generate a set of 10 high-fidelity DGCA level Multiple Choice Questions (MCQs) strictly based on the technical subject matter of the following topic.
-    
-    Subject: ${subject}
-    Topic: ${topic}
-
-    CRITICAL REQUIREMENTS:
-    1. DGCA Level Accuracy: Questions must mirror the complexity, wording, and technical depth found in actual DGCA Pilot exams for CPL/ATPL in India.
-    2. Exam Standards: At least 60% of these should be based on actual examination patterns relevant to Air Navigation, Met, etc.
-    3. Technical Standards: Use AirclassPRO standards for all navigation, meteorology, and technical data.
-    4. Operational Context: Include scenario-based questions where a pilot must apply the knowledge.
-    5. No Overlap: Ensure all 10 questions are distinct.
-
-    SCHEMA:
-    Response must be a VALID JSON ARRAY of objects.
-    Each object: { "question": string, "options": [4 strings], "correct": string (exact match from options), "explanation": string (technical breakdown) }
-
-    Do NOT include markdown block markers or conversational text. Just the raw JSON array.
-  `.trim();
-
-  try {
-    const response = await callAiProxy(prompt);
-    const text = response.text || "[]";
-    return JSON.parse(text.replace(/```json|```/g, ""));
-  } catch (error) {
-    console.error("Question Gen Error:", error);
-    return [];
+export async function generateAIQuestions(subject: string, topic: string): Promise<any> {
+    const prompt = `
+      You are an expert DGCA CPL/ATPL exam coach. Generate exactly 15 technical multiple-choice questions for the topic: "${topic}" within ${subject}.
+  
+      Return ONLY valid JSON in this exact format, no markdown, no preamble:
+      {
+        "topic": "${topic}",
+        "questions": [
+          {
+            "id": 1,
+            "question": "Question text here?",
+            "options": ["A. Option one", "B. Option two", "C. Option three", "D. Option four"],
+            "correct": "A",
+            "explanation": "Brief explanation of why A is correct."
+          }
+        ]
+      }
+  
+      Rules:
+      - All 15 questions must be relevant to ${topic}
+      - Questions should match DGCA exam difficulty
+      - Mix easy, medium, and hard difficulty
+      - Each question must have exactly 4 options labeled A, B, C, D
+      - The "correct" field must be just the letter: A, B, C, or D
+    `.trim();
+  
+    try {
+      const result = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json"
+        }
+      });
+      const text = result.text || '{"questions": []}';
+      return JSON.parse(text.replace(/```json|```/g, ""));
+    } catch (error) {
+      console.error("Question Gen Error:", error);
+      return { topic, questions: [] };
+    }
   }
-}
 
 export async function getWeatherBrief(icao: string, metar: string, taf: string | null): Promise<string> {
   const prompt = `
@@ -114,8 +149,11 @@ export async function getWeatherBrief(icao: string, metar: string, taf: string |
   `.trim();
 
   try {
-    const response = await callAiProxy(prompt);
-    return response.text || "I'm sorry, I couldn't generate a weather brief at this moment.";
+    const result = await ai.models.generateContent({
+      model,
+      contents: prompt
+    });
+    return result.text || "I'm sorry, I couldn't generate a weather brief at this moment.";
   } catch (error) {
     console.error("Gemini Weather Error:", error);
     return "The AI weather consultant is currently processing satellite data. Please retry after a short delay.";
@@ -143,8 +181,11 @@ export async function getWeatherResponse(question: string, context: { icao: stri
   `.trim();
 
   try {
-    const response = await callAiProxy(prompt);
-    return response.text || "I was unable to analyze your request. Please try rephrasing.";
+    const result = await ai.models.generateContent({
+      model,
+      contents: prompt
+    });
+    return result.text || "I was unable to analyze your request. Please try rephrasing.";
   } catch (error) {
     console.error("Gemini Q&A Error:", error);
     return "Weather Intelligence Link interrupted. Please standby.";
@@ -170,8 +211,11 @@ export async function decodeWeather(icao: string, metar: string, taf: string | n
   `.trim();
 
   try {
-    const response = await callAiProxy(prompt);
-    return response.text || "Unable to decode weather strings.";
+    const result = await ai.models.generateContent({
+      model,
+      contents: prompt
+    });
+    return result.text || "Unable to decode weather strings.";
   } catch (error) {
     console.error("Gemini Decode Error:", error);
     return "Weather decoding system offline. Reference AirclassPRO materials for manual decoding.";
@@ -194,8 +238,11 @@ export async function getAIInstructorBriefing(icao: string, metar: string, taf: 
   `.trim();
 
   try {
-    const response = await callAiProxy(prompt);
-    return response.text || "I'm sorry, I couldn't generate a briefing right now.";
+    const result = await ai.models.generateContent({
+      model,
+      contents: prompt
+    });
+    return result.text || "I'm sorry, I couldn't generate a briefing right now.";
   } catch (error) {
     console.error("Instructor Briefing Error:", error);
     return "The instructor is currently checked out. Please try again in a moment.";

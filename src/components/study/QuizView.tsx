@@ -36,18 +36,23 @@ export default function QuizView({ questions, isLoading, onReset, currentSubject
   const handleGenerate = async () => {
     if (!genQuery.trim()) return;
     setIsGenerating(true);
-    const newQs = await generateAIQuestions(currentSubject, genQuery);
-    if (newQs.length > 0) {
-      const formatted: QuizQuestion[] = newQs.map((q, i) => ({
-        id: `ai-${Date.now()}-${i}`,
-        question: q.question,
-        options: q.options,
-        correctAnswer: q.correct,
-        explanation: q.explanation,
-        type: 'mcq'
-      }));
-      setAiQuestions(prev => [...formatted, ...prev]);
-      setGenQuery('');
+    try {
+      const response = await generateAIQuestions(currentSubject, genQuery);
+      const newQs = response?.questions || [];
+      if (newQs.length > 0) {
+        const formatted: QuizQuestion[] = newQs.map((q: any, i: number) => ({
+          id: `ai-${Date.now()}-${i}`,
+          question: q.question,
+          options: q.options,
+          correctAnswer: q.correct,
+          explanation: q.explanation,
+          type: 'mcq'
+        }));
+        setAiQuestions(prev => [...formatted, ...prev]);
+        setGenQuery('');
+      }
+    } catch (error) {
+      console.error("Failed to generate quiz:", error);
     }
     setIsGenerating(false);
   };

@@ -33,11 +33,19 @@ export default function FlashcardView({ summary, history = [], isLoading }: Flas
   const handleGenerate = async () => {
     if (!genQuery.trim()) return;
     setIsGenerating(true);
-    const newCards = await generateAIFlashcards("Aviation General", genQuery);
-    if (newCards.length > 0) {
-      const formatted = newCards.map(c => ({ term: c.front, definition: c.back }));
-      setAiDecks(prev => [...formatted, ...prev]);
-      setGenQuery('');
+    try {
+      const response = await generateAIFlashcards("Aviation General", genQuery);
+      const newCards = response?.flashcards || [];
+      if (newCards.length > 0) {
+        const formatted = newCards.map((c: any) => ({ 
+          term: c.front, 
+          definition: c.back 
+        }));
+        setAiDecks(prev => [...formatted, ...prev]);
+        setGenQuery('');
+      }
+    } catch (error) {
+      console.error("Failed to generate flashcards:", error);
     }
     setIsGenerating(false);
   };
