@@ -1,8 +1,7 @@
-import Groq from "groq-sdk";
 import { Summary, QuizQuestion, BrainHacks, Scenario } from "../types";
+import callAiProxy from "./aiProxy";
 
-const ai = new Groq({ apiKey: process.env.GROQ_API_KEY });
-const model = "llama3-70b-8192";
+const model = "gemini-2.0-flash";
 
 const AVIATION_CONTEXT = `
 Role: You are the Lead Flight Instructor for AirclassPRO. You are a high-performance academic and operational coach for DGCA pilot aspirants. Your technical intelligence is strictly grounded in AirclassPRO original training standards and official DGCA curriculum.
@@ -65,79 +64,105 @@ Operational Output Rules:
 3. Tone: Professional, clear, and safety-oriented. Use "Pilot-in-Command" authority.
 `;
 
-async function callGroq(prompt: string): Promise<string> {
-  const result = await ai.chat.completions.create({
-    model,
-    messages: [{ role: "user", content: prompt }]
-  });
-  return result.choices[0].message.content || "";
-}
-
 export async function generateScenario(topic: string): Promise<Scenario> {
-  const prompt = `${AVIATION_CONTEXT}
-Generate a high-stakes aviation decision-making scenario based on the topic: ${topic}.
+  const result = await callAiProxy(
+    `${AVIATION_CONTEXT}
+    Generate a high-stakes aviation decision-making scenario based on the topic: ${topic}.
+    
+    Return ONLY valid JSON in this format:
+    {
+      "title": "Scenario Title",
+      "description": "Technical description of the situation",
+      "options": [
+        { "id": "1", "text": "Option 1", "consequence": "Result of choosing this", "isSafe": false },
+        ... exactly 4 options
+      ],
+      "correctLogic": "Detailed explanation of why the safe choice is correct according to DGCA/ICAO rules"
+    }
+    
+    Ensure exactly 4 options are provided. One must be safe (isSafe: true), others unsafe.`,
+    {
+      maxOutputTokens: 2000
+    },
+    model
+  );
 
-Return ONLY valid JSON in this format:
-{
-  "title": "Scenario Title",
-  "description": "Technical description of the situation",
-  "options": [
-    { "id": "1", "text": "Option 1", "consequence": "Result of choosing this", "isSafe": false },
-    { "id": "2", "text": "Option 2", "consequence": "Result of choosing this", "isSafe": true },
-    { "id": "3", "text": "Option 3", "consequence": "Result of choosing this", "isSafe": false },
-    { "id": "4", "text": "Option 4", "consequence": "Result of choosing this", "isSafe": false }
-  ],
-  "correctLogic": "Explanation of why the safe choice is correct according to DGCA/ICAO rules."
-}`;
-  const text = await callGroq(prompt);
-  return JSON.parse(text.replace(/```json|```/g, "").trim() || "{}");
+  const text = result.text || "{}";
+  return JSON.parse(text.replace(/```json|```/g, "").trim());
 }
 
 export async function generateSummary(text: string): Promise<Summary> {
-  const prompt = `${AVIATION_CONTEXT}
-Summarize the following aviation/DGCA study material into "The Flight Log" (3-level summary):
-1. Operational Briefing (Big Picture): 1 sentence on the technical operational relevance.
-2. Technical Pillars (Core Pillars): 3-5 critical technical facts.
-3. The Checklist (Cheat Sheet): Key terms/formulas and their definitions.
+  const result = await callAiProxy(
+    `${AVIATION_CONTEXT}
+    Summarize the following aviation/DGCA study material into "The Flight Log" (3-level summary).
+    
+    Return ONLY valid JSON in this format:
+    {
+      "bigPicture": "1 sentence on the technical operational relevance",
+      "corePillars": ["Fact 1", "Fact 2", "Fact 3"],
+      "cheatSheet": [
+        { "term": "Term 1", "definition": "Definition 1" }
+      ]
+    }
+    
+    Text: ${text}`,
+    {
+      maxOutputTokens: 2000
+    },
+    model
+  );
 
-Text: ${text}`;
-  const result = await callGroq(prompt);
-  return JSON.parse(result.replace(/```json|```/g, "").trim() || "{}");
+  const cleanText = result.text || "{}";
+  return JSON.parse(cleanText.replace(/```json|```/g, "").trim());
 }
 
 export async function generateQuiz(text: string): Promise<QuizQuestion[]> {
-  const prompt = `${AVIATION_CONTEXT}
-You are an expert DGCA CPL/ATPL exam coach. Generate exactly 15 high-fidelity technical MCQs strictly based on the following material.
+  const result = await callAiProxy(
+    `${AVIATION_CONTEXT}
+    You are an expert DGCA CPL/ATPL exam coach. Generate exactly 15 high-fidelity technical MCQs strictly based on the following material.
+    
+    Return ONLY valid JSON in this exact format (an array of objects):
+    [
+      {
+        "id": "1",
+        "type": "mcq",
+        "question": "The question text",
+        "options": ["Option A", "Option B", "Option C", "Option D"],
+        "correctAnswer": "A",
+        "explanation": "Why A is correct"
+      }
+    ]
+    
+    Text Segment: ${text}`,
+    {
+      maxOutputTokens: 4000
+    },
+    model
+  );
 
-Requirements:
-1. Technical Depth: Questions must capture critical technical nuances mirroring DGCA exam standards.
-2. Count: Provide exactly 15 Multiple Choice Questions (MCQs).
-3. Options: Each question must have exactly 4 options labeled A, B, C, D.
-4. Correct Answer: The "correctAnswer" field should be just the letter: A, B, C, or D.
-
-Text Segment: ${text}
-
-Return ONLY valid JSON array, no markdown:
-[{
-  "id": "1",
-  "type": "mcq",
-  "question": "Question text",
-  "options": ["A. Option one", "B. Option two", "C. Option three", "D. Option four"],
-  "correctAnswer": "A",
-  "explanation": "Brief explanation"
-}]`;
-  const result = await callGroq(prompt);
-  return JSON.parse(result.replace(/```json|```/g, "").trim() || "[]");
+  const cleanText = result.text || "[]";
+  return JSON.parse(cleanText.replace(/```json|```/g, "").trim());
 }
 
 export async function generateBrainHacks(text: string): Promise<BrainHacks> {
-  const prompt = `${AVIATION_CONTEXT}
-For the primary concepts in the following text, provide memory aids suitable for a pilot under high cockpit workload:
-1. The "Lego" Breakdown: Simple step-by-step logic (like a FLOW or CHECKLIST).
-2. A Mnemonic: A catchy acronym to remember the concept.
-3. The "ELI5": A simple analogy from everyday life that clarifies the technical aviation concept.
+  const result = await callAiProxy(
+    `${AVIATION_CONTEXT}
+    For the primary concepts in the following text, provide memory aids suitable for a pilot under high cockpit workload.
+    
+    Return ONLY valid JSON in this format:
+    {
+      "legoBreakdown": ["Step 1", "Step 2", "Step 3"],
+      "mnemonic": " Catchy acronym (e.g., PAVE)",
+      "eli5": "Simple everyday analogy"
+    }
+    
+    Text: ${text}`,
+    {
+      maxOutputTokens: 2000
+    },
+    model
+  );
 
-Text: ${text}`;
-  const result = await callGroq(prompt);
-  return JSON.parse(result.replace(/```json|```/g, "").trim() || "{}");
+  const cleanText = result.text || "{}";
+  return JSON.parse(cleanText.replace(/```json|```/g, "").trim());
 }
