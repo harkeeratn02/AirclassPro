@@ -11,14 +11,20 @@ const __dirname = path.dirname(__filename);
 // Initialize Gemini
 let genAI: GoogleGenAI | null = null;
 
+function getGenAI() {
+  if (!genAI && process.env.GEMINI_API_KEY) {
+    console.log("[AI] Initializing Gemini SDK...");
+    genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  }
+  return genAI;
+}
+
 async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
 
-  // Lazy init Gemini to avoid crashing if key is missing at startup
-  if (process.env.GEMINI_API_KEY) {
-    genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  }
+  // Initial check
+  getGenAI();
 
   // CORS
   app.use(cors());
@@ -111,23 +117,39 @@ app.get("/api/metar", async (req, res) => {
 
   // AI Endpoint
   app.post("/api/ai", async (req, res) => {
+    console.log(`[AI] Request received: ${req.method} ${req.url}`);
     try {
       const { model: modelId, contents, config } = req.body;
+      console.log(`[AI] Payload - Model: ${modelId || "default"}, Content Length: ${JSON.stringify(contents || "").length}`);
       
-      if (!process.env.GEMINI_API_KEY || !genAI) {
+      const ai = getGenAI();
+      if (!process.env.GEMINI_API_KEY || !ai) {
         console.error("[CRITICAL] GEMINI_API_KEY is not set in environment variables");
         return res.status(500).json({ error: "GEMINI_API_KEY not configured on server" });
       }
 
-      const result = await genAI.models.generateContent({
+      console.log(`[AI] Calling Gemini API...`);
+      const result = await ai.models.generateContent({
         model: modelId || "gemini-3-flash-preview",
         contents,
         config
       });
+
+      if (!result) {
+        console.error("[AI] Gemini returned null/undefined result");
+        return res.status(500).json({ error: "Gemini returned no result" });
+      }
+
+      console.log(`[AI] Gemini success. Response length: ${result.text?.length || 0}`);
       res.json({ text: result.text });
     } catch (error: any) {
-      console.error("AI Error:", error);
-      res.status(500).json({ error: error.message || "AI generation failed" });
+      console.error("[AI] Error during generation:", error);
+      // Log stack trace for better debugging on Render
+      if (error.stack) console.error(error.stack);
+      res.status(500).json({ 
+        error: error.message || "AI generation failed",
+        details: error.toString()
+      });
     }
   });
 
@@ -140,6 +162,7 @@ app.get("/api/metar", async (req, res) => {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
+    console.log(`[Server] Production mode: serving static files from ${distPath}`);
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
