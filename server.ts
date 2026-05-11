@@ -130,7 +130,7 @@ app.get("/api/metar", async (req, res) => {
 
       console.log(`[AI] Calling Gemini API...`);
       const result = await ai.models.generateContent({
-        model: modelId || "gemini-3-flash-preview",
+        model: modelId || "gemini-1.5-flash",
         contents,
         config
       });

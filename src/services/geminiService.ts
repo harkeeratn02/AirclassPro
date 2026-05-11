@@ -2,7 +2,7 @@ import { Type } from "@google/genai";
 import { Summary, QuizQuestion, BrainHacks, Scenario } from "../types";
 import callAiProxy from "./aiProxy";
 
-const model = "gemini-3-flash-preview";
+const model = "gemini-1.5-flash";
 
 const AVIATION_CONTEXT = `
 Role: You are the Lead Flight Instructor for AirclassPRO. You are a high-performance academic and operational coach for DGCA pilot aspirants. Your technical intelligence is strictly grounded in AirclassPRO original training standards and official DGCA curriculum.

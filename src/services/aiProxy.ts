@@ -1,4 +1,4 @@
-async function callAiProxy(contents: any, config?: any, model: string = "gemini-3-flash-preview") {
+async function callAiProxy(contents: any, config?: any, model: string = "gemini-1.5-flash") {
   const apiUrl = `/api/ai`;
   
   const response = await fetch(apiUrl, {
