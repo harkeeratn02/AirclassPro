@@ -3,20 +3,20 @@ import cors from "cors";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
-import { Anthropic } from "@anthropic-ai/sdk";
+import { GoogleGenAI } from "@google/genai";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Initialize Anthropic
-let anthropic: Anthropic | null = null;
+// Initialize Gemini
+let genAI: GoogleGenAI | null = null;
 
-function getAnthropic() {
-  if (!anthropic && process.env.ANTHROPIC_API_KEY) {
-    console.log("[AI] Initializing Anthropic SDK...");
-    anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+function getGenAI() {
+  if (!genAI && process.env.GEMINI_API_KEY) {
+    console.log("[AI] Initializing Gemini SDK...");
+    genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   }
-  return anthropic;
+  return genAI;
 }
 
 async function startServer() {
@@ -24,7 +24,7 @@ async function startServer() {
   const PORT = Number(process.env.PORT) || 3000;
 
   // Initial check
-  getAnthropic();
+  getGenAI();
 
   // CORS
   app.use(cors());
@@ -38,7 +38,7 @@ async function startServer() {
       status: "ok",
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || "development",
-      anthropicConfigured: !!process.env.ANTHROPIC_API_KEY
+      geminiConfigured: !!process.env.GEMINI_API_KEY
     });
   });
 
@@ -120,30 +120,28 @@ app.get("/api/metar", async (req, res) => {
     console.log(`[AI] Request received: ${req.method} ${req.url}`);
     try {
       const { model: modelId, contents, config } = req.body;
-      const prompt = typeof contents === 'string' ? contents : JSON.stringify(contents);
+      console.log(`[AI] Payload - Model: ${modelId || "default"}, Content Length: ${JSON.stringify(contents || "").length}`);
       
-      console.log(`[AI] Payload - Model: ${modelId || "default"}, Prompt Length: ${prompt.length}`);
-      
-      const client = getAnthropic();
-      if (!process.env.ANTHROPIC_API_KEY || !client) {
-        console.error("[CRITICAL] ANTHROPIC_API_KEY is not set in environment variables");
-        return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured on server" });
+      const ai = getGenAI();
+      if (!process.env.GEMINI_API_KEY || !ai) {
+        console.error("[CRITICAL] GEMINI_API_KEY is not set in environment variables");
+        return res.status(500).json({ error: "GEMINI_API_KEY not configured on server" });
       }
 
-      console.log(`[AI] Calling Anthropic API...`);
-      
-      // Basic implementation for Claude 3
-      const msg = await client.messages.create({
-        model: modelId || "claude-3-haiku-20240307",
-        max_tokens: config?.maxOutputTokens || 4096,
-        messages: [{ role: "user", content: prompt }],
-        system: "You are an expert aviation instructor. Return only the requested data format (e.g., JSON) without preamble if JSON is requested."
+      console.log(`[AI] Calling Gemini API...`);
+      const result = await ai.models.generateContent({
+        model: modelId || "gemini-1.5-flash",
+        contents,
+        config
       });
 
-      const text = msg.content[0].type === 'text' ? msg.content[0].text : "";
+      if (!result) {
+        console.error("[AI] Gemini returned null/undefined result");
+        return res.status(500).json({ error: "Gemini returned no result" });
+      }
 
-      console.log(`[AI] Anthropic success. Response length: ${text.length}`);
-      res.json({ text });
+      console.log(`[AI] Gemini success. Response length: ${result.text?.length || 0}`);
+      res.json({ text: result.text });
     } catch (error: any) {
       console.error("[AI] Error during generation:", error);
       if (error.stack) console.error(error.stack);

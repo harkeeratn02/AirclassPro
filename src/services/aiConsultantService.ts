@@ -1,6 +1,6 @@
 import callAiProxy from "./aiProxy";
 
-const model = "claude-3-haiku-20240307";
+const model = "gemini-1.5-flash";
 
 export interface SubjectChapter {
   subject: string;
