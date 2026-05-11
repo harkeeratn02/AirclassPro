@@ -1,6 +1,6 @@
 import callAiProxy from "./aiProxy";
 
-const model = "gemini-1.5-flash";
+const model = "claude-3-haiku-20240307";
 
 export interface SubjectChapter {
   subject: string;
@@ -62,7 +62,7 @@ export async function generateAIFlashcards(subject: string, topic: string): Prom
     `.trim();
   
     try {
-      const result = await callAiProxy(prompt, { responseMimeType: "application/json" }, model);
+      const result = await callAiProxy(prompt, { maxOutputTokens: 2000 }, model);
       const text = result.text || '{"flashcards": []}';
       return JSON.parse(text.replace(/```json|```/g, ""));
     } catch (error) {
@@ -98,7 +98,7 @@ export async function generateAIQuestions(subject: string, topic: string): Promi
     `.trim();
   
     try {
-      const result = await callAiProxy(prompt, { responseMimeType: "application/json" }, model);
+      const result = await callAiProxy(prompt, { maxOutputTokens: 2000 }, model);
       const text = result.text || '{"questions": []}';
       return JSON.parse(text.replace(/```json|```/g, ""));
     } catch (error) {

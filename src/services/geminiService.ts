@@ -1,8 +1,7 @@
-import { Type } from "@google/genai";
 import { Summary, QuizQuestion, BrainHacks, Scenario } from "../types";
 import callAiProxy from "./aiProxy";
 
-const model = "gemini-1.5-flash";
+const model = "claude-3-haiku-20240307";
 
 const AVIATION_CONTEXT = `
 Role: You are the Lead Flight Instructor for AirclassPRO. You are a high-performance academic and operational coach for DGCA pilot aspirants. Your technical intelligence is strictly grounded in AirclassPRO original training standards and official DGCA curriculum.
@@ -69,81 +68,52 @@ export async function generateScenario(topic: string): Promise<Scenario> {
   const result = await callAiProxy(
     `${AVIATION_CONTEXT}
     Generate a high-stakes aviation decision-making scenario based on the topic: ${topic}.
-    Provide:
-    1. A Title.
-    2. A technical Description of the situation (e.g., partial engine failure, deteriorating weather).
-    3. 4 possible Options the pilot could take.
-    4. Each option must have a consequence and a boolean indicating if it's the safest 'correct' choice.
-    5. A correctLogic field explaining why the safe choice is correct according to DGCA/ICAO rules.`,
+    
+    Return ONLY valid JSON in this format:
     {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          title: { type: Type.STRING },
-          description: { type: Type.STRING },
-          options: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                id: { type: Type.STRING },
-                text: { type: Type.STRING },
-                consequence: { type: Type.STRING },
-                isSafe: { type: Type.BOOLEAN }
-              },
-              required: ["id", "text", "consequence", "isSafe"]
-            }
-          },
-          correctLogic: { type: Type.STRING }
-        },
-        required: ["title", "description", "options", "correctLogic"]
-      }
+      "title": "Scenario Title",
+      "description": "Technical description of the situation",
+      "options": [
+        { "id": "1", "text": "Option 1", "consequence": "Result of choosing this", "isSafe": false },
+        ... exactly 4 options
+      ],
+      "correctLogic": "Detailed explanation of why the safe choice is correct according to DGCA/ICAO rules"
+    }
+    
+    Ensure exactly 4 options are provided. One must be safe (isSafe: true), others unsafe.`,
+    {
+      maxOutputTokens: 2000
     },
     model
   );
 
-  return JSON.parse(result.text || "{}");
+  const text = result.text || "{}";
+  return JSON.parse(text.replace(/```json|```/g, "").trim());
 }
 
 export async function generateSummary(text: string): Promise<Summary> {
   const result = await callAiProxy(
     `${AVIATION_CONTEXT}
-    Summarize the following aviation/DGCA study material into "The Flight Log" (3-level summary):
-    1. Operational Briefing (Big Picture): 1 sentence on the technical operational relevance.
-    2. Technical Pillars (Core Pillars): 3-5 critical technical facts.
-    3. The Checklist (Cheat Sheet): Key terms/formulas and their definitions.
+    Summarize the following aviation/DGCA study material into "The Flight Log" (3-level summary).
+    
+    Return ONLY valid JSON in this format:
+    {
+      "bigPicture": "1 sentence on the technical operational relevance",
+      "corePillars": ["Fact 1", "Fact 2", "Fact 3"],
+      "cheatSheet": [
+        { "term": "Term 1", "definition": "Definition 1" }
+      ]
+    }
     
     Text: ${text}`,
     {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          bigPicture: { type: Type.STRING },
-          corePillars: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING }
-          },
-          cheatSheet: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                term: { type: Type.STRING },
-                definition: { type: Type.STRING }
-              },
-              required: ["term", "definition"]
-            }
-          }
-        },
-        required: ["bigPicture", "corePillars", "cheatSheet"]
-      }
+      maxOutputTokens: 2000
     },
     model
   );
 
-  return JSON.parse(result.text || "{}");
+  const cleanText = result.text || "{}";
+  return JSON.parse(cleanText.replace(/```json|```/g, "").trim());
 }
 
 export async function generateQuiz(text: string): Promise<QuizQuestion[]> {
@@ -151,66 +121,48 @@ export async function generateQuiz(text: string): Promise<QuizQuestion[]> {
     `${AVIATION_CONTEXT}
     You are an expert DGCA CPL/ATPL exam coach. Generate exactly 15 high-fidelity technical MCQs strictly based on the following material.
     
-    Requirements:
-    1. Technical Depth: Questions must capture critical technical nuances (limits, speeds, formulas, rules) mirroring DGCA exam standards.
-    2. Count: Provide exactly 15 Multiple Choice Questions (MCQs).
-    3. Options: Each question must have exactly 4 options labeled A, B, C, D.
-    4. Correct Answer: The "correctAnswer" field should be just the letter: A, B, C, or D.
+    Return ONLY valid JSON in this exact format (an array of objects):
+    [
+      {
+        "id": "1",
+        "type": "mcq",
+        "question": "The question text",
+        "options": ["Option A", "Option B", "Option C", "Option D"],
+        "correctAnswer": "A",
+        "explanation": "Why A is correct"
+      }
+    ]
     
     Text Segment: ${text}`,
     {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            id: { type: Type.STRING },
-            type: { type: Type.STRING, enum: ["mcq"] },
-            question: { type: Type.STRING },
-            options: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING }
-            },
-            correctAnswer: { type: Type.STRING },
-            explanation: { type: Type.STRING }
-          },
-          required: ["id", "type", "question", "options", "correctAnswer", "explanation"]
-        }
-      }
+      maxOutputTokens: 4000
     },
     model
   );
 
-  return JSON.parse(result.text || "[]");
+  const cleanText = result.text || "[]";
+  return JSON.parse(cleanText.replace(/```json|```/g, "").trim());
 }
 
 export async function generateBrainHacks(text: string): Promise<BrainHacks> {
   const result = await callAiProxy(
     `${AVIATION_CONTEXT}
-    For the primary concepts in the following text, provide memory aids suitable for a pilot under high cockpit workload:
-    1. The "Lego" Breakdown: Simple step-by-step logic (like a FLOW or CHECKLIST).
-    2. A Mnemonic: A catchy acronym (e.g., PAVE, IMSAFE) to remember the concept.
-    3. The "ELI5": A simple analogy from everyday life that clarifies the technical aviation concept.
+    For the primary concepts in the following text, provide memory aids suitable for a pilot under high cockpit workload.
+    
+    Return ONLY valid JSON in this format:
+    {
+      "legoBreakdown": ["Step 1", "Step 2", "Step 3"],
+      "mnemonic": " Catchy acronym (e.g., PAVE)",
+      "eli5": "Simple everyday analogy"
+    }
     
     Text: ${text}`,
     {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          legoBreakdown: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING }
-          },
-          mnemonic: { type: Type.STRING },
-          eli5: { type: Type.STRING }
-        },
-        required: ["legoBreakdown", "mnemonic", "eli5"]
-      }
+      maxOutputTokens: 2000
     },
     model
   );
 
-  return JSON.parse(result.text || "{}");
+  const cleanText = result.text || "{}";
+  return JSON.parse(cleanText.replace(/```json|```/g, "").trim());
 }
